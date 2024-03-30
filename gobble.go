@@ -1,35 +1,415 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
+	"os"
 )
 
-// DBTable struct
-// Methods: Insert, Update, Delete, Select
+// Storage Structure:
+// - DB directory
+//   - Collection1 directory
+//     - numbered files each containing a gob encoded struct: "d1.gob" "d2.gob" ...
+//     - metadata file: "meta.gob"
 
-type DBTable[T any] struct {
+type DB struct {
+	Path string
+}
+
+func OpenDB(path string) (DB, error) {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return DB{}, err
+	}
+
+	return DB{Path: path}, nil
+}
+
+func (t *DB) ListCollections() ([]string, error) {
+	f, err := os.Open(t.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
+
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	return names, nil
+}
+
+func (t *DB) CollectionExists(name string) (bool, error) {
+	collections, err := t.ListCollections()
+	if err != nil {
+		return false, err
+	}
+
+	for _, collection := range collections {
+		if collection == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (t *DB) DeleteCollection(name string) error {
+	exists, err := t.CollectionExists(name)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return fmt.Errorf("collection does not exist")
+	}
+
+	if err = os.RemoveAll(t.Path + "/" + name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type Collection[T any] struct {
 	Name string
+	DB   DB
+}
+
+func initializeCollection[T any](name string, db DB) error {
+	if err := os.MkdirAll(db.Path+"/"+name, 0755); err != nil {
+		return err
+	}
+
+	file, err := os.Create(db.Path + "/" + name + "/meta.gob")
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	enc := gob.NewEncoder(file)
+	err = enc.Encode(CollectionMetadata[T]{LastID: 0})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func OpenCollection[T any](db DB, name string) (Collection[T], error) {
+	if !isValidCollectionName(name) {
+		return Collection[T]{}, fmt.Errorf("invalid collection name")
+	}
+
+	exists, err := db.CollectionExists(name)
+	if err != nil {
+		return Collection[T]{}, err
+	}
+
+	if !exists {
+		if err := initializeCollection[T](name, db); err != nil {
+			return Collection[T]{}, err
+		}
+	}
+
+	return Collection[T]{Name: name, DB: db}, nil
 }
 
 type Query[T any] func(T) bool
+type Updater[T any] func(T) T
 
-func (t *DBTable[T]) Insert(data T) {
-	fmt.Println("Inserting", data, "into", t.Name)
+type CollectionMetadata[T any] struct {
+	LastID int
 }
 
-func (t *DBTable[T]) Update(query Query[T], data T) {
-	fmt.Println("Updating", data, "in", t.Name)
+func (t *Collection[T]) GetMetadata() (CollectionMetadata[T], error) {
+	file, err := os.Open(t.DB.Path + "/" + t.Name + "/meta.gob")
+	if err != nil {
+		return CollectionMetadata[T]{}, err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	var meta CollectionMetadata[T]
+	dec := gob.NewDecoder(file)
+	err = dec.Decode(&meta)
+	if err != nil {
+		return CollectionMetadata[T]{}, err
+	}
+
+	return meta, nil
 }
 
-func (t *DBTable[T]) Delete(query Query[T]) {
-	fmt.Println("Deleting", query, "from", t.Name)
+func (t *Collection[T]) incrementID() error {
+	meta, err := t.GetMetadata()
+	if err != nil {
+		return err
+	}
+
+	meta.LastID++
+
+	file, err := os.Create(t.DB.Path + "/" + t.Name + "/meta.gob")
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	enc := gob.NewEncoder(file)
+	err = enc.Encode(meta)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (t *DBTable[T]) Select(query Query[T]) []T {
-	fmt.Println("Selecting", query, "from", t.Name)
-	return []T{}
+func (t *Collection[T]) Insert(data T) error {
+	if err := t.incrementID(); err != nil {
+		return err
+	}
+
+	meta, err := t.GetMetadata()
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(t.DB.Path + "/" + t.Name + "/d" + fmt.Sprintf("d%d", meta.LastID) + ".gob")
+
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	enc := gob.NewEncoder(file)
+	err = enc.Encode(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (t *DBTable[T]) GetID() int {
-	return 0
+func (t *Collection[T]) Update(query Query[T], updater Updater[T]) error {
+	dir, err := os.Open(t.DB.Path + "/" + t.Name)
+	if err != nil {
+		return err
+	}
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+
+		if query(data) {
+			data = updater(data)
+
+			f, err := os.Create(t.DB.Path + "/" + t.Name + "/" + file.Name())
+			if err != nil {
+				return err
+			}
+
+			enc := gob.NewEncoder(f)
+			err = enc.Encode(data)
+			err = f.Close()
+			if err != nil {
+				return err
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
+
+func (t *Collection[T]) Delete(query Query[T]) error {
+	dir, err := os.Open(t.DB.Path + "/" + t.Name)
+	if err != nil {
+		return err
+	}
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+
+		if query(data) {
+			err = os.Remove(t.DB.Path + "/" + t.Name + "/" + file.Name())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *Collection[T]) Select(query Query[T]) ([]T, error) {
+	dir, err := os.Open(t.DB.Path + "/" + t.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []T
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
+		if err != nil {
+			return nil, err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		err = f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if query(data) {
+			results = append(results, data)
+		}
+	}
+
+	return results, nil
+}
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	db, err := OpenDB("db")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = db.DeleteCollection("people")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	collection, err := OpenCollection[Person](db, "people")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = collection.Insert(Person{Name: "Alice", Age: 30})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = collection.Insert(Person{Name: "Bob", Age: 40})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = collection.Update(func(p Person) bool {
+		return p.Age > 35
+	}, func(p Person) Person {
+		p.Age += 1
+		return p
+	})
+
+	results, err := collection.Select(func(p Person) bool {
+		return p.Age > 25
+	})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	for _, result := range results {
+		fmt.Println(result)
+	}
+}
+
+//type Index[T any] struct {
+//}
