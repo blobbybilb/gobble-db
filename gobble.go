@@ -180,7 +180,7 @@ func (t *Collection[T]) Insert(data T) error {
 		return err
 	}
 
-	file, err := os.Create(t.DB.Path + "/" + t.Name + "/d" + fmt.Sprintf("d%d", meta.LastID) + ".gob")
+	file, err := os.Create(t.DB.Path + "/" + t.Name + "/d" + fmt.Sprintf("%d", meta.LastID) + ".gob")
 
 	if err != nil {
 		return err
@@ -217,6 +217,10 @@ func (t *Collection[T]) Update(query Query[T], updater Updater[T]) error {
 
 	for _, file := range files {
 		if file.IsDir() {
+			continue
+		}
+
+		if file.Name()[0] != 'd' {
 			continue
 		}
 
@@ -281,6 +285,10 @@ func (t *Collection[T]) Delete(query Query[T]) error {
 			continue
 		}
 
+		if file.Name()[0] != 'd' {
+			continue
+		}
+
 		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
 		if err != nil {
 			return err
@@ -331,6 +339,10 @@ func (t *Collection[T]) Select(query Query[T]) ([]T, error) {
 			continue
 		}
 
+		if file.Name()[0] != 'd' {
+			continue
+		}
+
 		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
 		if err != nil {
 			return nil, err
@@ -355,61 +367,13 @@ func (t *Collection[T]) Select(query Query[T]) ([]T, error) {
 	return results, nil
 }
 
-type Person struct {
-	Name string
-	Age  int
-}
+// Indexing Structure:
+// - DB directory
+//   - Collection1 directory
+//     - index files: "i<field>.gob" "i<field>.gob" ...
 
-func main() {
-	db, err := OpenDB("db")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = db.DeleteCollection("people")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	collection, err := OpenCollection[Person](db, "people")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = collection.Insert(Person{Name: "Alice", Age: 30})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = collection.Insert(Person{Name: "Bob", Age: 40})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = collection.Update(func(p Person) bool {
-		return p.Age > 35
-	}, func(p Person) Person {
-		p.Age += 1
-		return p
-	})
-
-	results, err := collection.Select(func(p Person) bool {
-		return p.Age > 25
-	})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	for _, result := range results {
-		fmt.Println(result)
-	}
-}
+// Indexing implementation:
+// -
 
 //type Index[T any] struct {
 //}
