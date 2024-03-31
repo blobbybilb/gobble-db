@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var timeLast int64 = time.Now().UnixMicro()
+var timeLast = time.Now().UnixMicro()
 
 func timing(msg string) {
 	timeNow := time.Now().UnixMicro()
@@ -15,7 +15,6 @@ func timing(msg string) {
 
 func bench() {
 	// Benchmarks
-
 	timing("Start")
 
 	// Initialize the DB

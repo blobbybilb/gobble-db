@@ -195,6 +195,69 @@ func (t *Collection[T]) Insert(data T) error {
 		return err
 	}
 
+	// Update index files
+	dir, err := os.Open(t.DB.Path + "/" + t.Name)
+	if err != nil {
+		return err
+	}
+
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		if file.Name()[0] != 'i' {
+			continue
+		}
+
+		f, err := os.Open(t.DB.Path + "/" + t.Name + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+
+		var index IndexData[string]
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&index)
+		if err != nil {
+			return err
+		}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+
+		key := index["name"]
+		key = append(key, fmt.Sprintf("%d", meta.LastID))
+		index["name"] = key
+
+		f, err = os.Create(t.DB.Path + "/" + t.Name + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+
+		enc := gob.NewEncoder(f)
+		err = enc.Encode(index)
+		if err != nil {
+			return err
+		}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -310,6 +373,60 @@ func (t *Collection[T]) Delete(query Query[T]) error {
 			if err != nil {
 				return err
 			}
+
+			// Update index files
+			indexFiles, err := dir.Readdir(-1)
+			if err != nil {
+				return err
+			}
+
+			for _, indexFile := range indexFiles {
+				if indexFile.IsDir() || indexFile.Name()[0] != 'i' {
+					continue
+				}
+
+				indexF, err := os.Open(t.DB.Path + "/" + t.Name + "/" + indexFile.Name())
+				if err != nil {
+					return err
+				}
+
+				var index IndexData[string]
+				dec := gob.NewDecoder(indexF)
+				err = dec.Decode(&index)
+				if err != nil {
+					return err
+				}
+				err = indexF.Close()
+				if err != nil {
+					return err
+				}
+
+				// Remove the deleted data from the index
+				for key, ids := range index {
+					for i, id := range ids {
+						if id == file.Name()[1:len(file.Name())-4] {
+							index[key] = append(ids[:i], ids[i+1:]...)
+							break
+						}
+					}
+				}
+
+				// Write the updated index back to the file
+				indexF, err = os.Create(t.DB.Path + "/" + t.Name + "/" + indexFile.Name())
+				if err != nil {
+					return err
+				}
+
+				enc := gob.NewEncoder(indexF)
+				err = enc.Encode(index)
+				if err != nil {
+					return err
+				}
+				err = indexF.Close()
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -370,10 +487,220 @@ func (t *Collection[T]) Select(query Query[T]) ([]T, error) {
 // Indexing Structure:
 // - DB directory
 //   - Collection1 directory
-//     - index files: "i<field>.gob" "i<field>.gob" ...
-
+//     - index files: "i<name>.gob" "i<name>.gob" ...
 // Indexing implementation:
-// -
+// - Index created by passing in a function that extracts the data to be indexed
+// - Stored as a simple hashmap for now, maybe b-tree later
 
-//type Index[T any] struct {
-//}
+type Index[T any, D comparable] struct {
+	Collection Collection[T]
+	Name       string
+	Extractor  func(T) D
+}
+
+type IndexData[D comparable] map[D][]string
+
+func (t *Collection[T]) ListIndexes() ([]string, error) {
+	dir, err := os.Open(t.DB.Path + "/" + t.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	var indexes []string
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		if file.Name()[0] != 'i' {
+			continue
+		}
+
+		indexes = append(indexes, file.Name()[1:len(file.Name())-4])
+	}
+
+	return indexes, nil
+}
+
+func (t *Collection[T]) IndexExists(name string) (bool, error) {
+	indexes, err := t.ListIndexes()
+	if err != nil {
+		return false, err
+	}
+
+	for _, index := range indexes {
+		if index == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (t *Collection[T]) DeleteIndex(name string) error {
+	err := os.Remove(t.DB.Path + "/" + t.Name + "/i" + name + ".gob")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Index[T, D]) Build() error {
+	exists, err := t.Collection.IndexExists(t.Name)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return fmt.Errorf("index already exists")
+	}
+
+	index := IndexData[D]{}
+
+	dir, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name)
+	if err != nil {
+		return err
+	}
+
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		if file.Name()[0] != 'd' {
+			continue
+		}
+
+		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+
+		key := t.Extractor(data)
+		index[key] = append(index[key], file.Name()[1:len(file.Name())-4])
+	}
+
+	file, err := os.Create(t.Collection.DB.Path + "/" + t.Collection.Name + "/i" + t.Name + ".gob")
+	if err != nil {
+		return err
+	}
+
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(file)
+
+	enc := gob.NewEncoder(file)
+	err = enc.Encode(index)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func OpenIndex[T any, D comparable](collection Collection[T], name string, extractor func(T) D) (Index[T, D], error) {
+	if !isValidIndexName(name) {
+		return Index[T, D]{}, fmt.Errorf("invalid index name")
+	}
+	index := Index[T, D]{Collection: collection, Extractor: extractor, Name: name}
+
+	exists, err := collection.IndexExists(name)
+	if err != nil {
+		return Index[T, D]{}, err
+	}
+
+	if !exists {
+		if err := index.Build(); err != nil {
+			return Index[T, D]{}, err
+		}
+	}
+
+	return index, nil
+}
+
+func (t *Index[T, D]) Get(key D) ([]T, error) {
+	file, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/i" + t.Name + ".gob")
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(file)
+
+	var index IndexData[D]
+	dec := gob.NewDecoder(file)
+	err = dec.Decode(&index)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := index[key]
+	if ids == nil {
+		return []T{}, nil
+	}
+
+	var results []T
+	for _, id := range ids {
+		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + id + ".gob")
+		if err != nil {
+			return nil, err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		if err != nil {
+			return nil, err
+		}
+		err = f.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, data)
+	}
+
+	return results, nil
+}
