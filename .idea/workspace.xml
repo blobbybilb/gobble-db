@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="">
+    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="indices attempt">
       <change afterPath="$PROJECT_DIR$/Screenshot 2024-03-31 at 10.50.21 AM.png" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/testdb/people/d1.gob" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/testdb/people/d2.gob" afterDir="false" />
@@ -113,6 +113,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+    <MESSAGE value="indices attempt" />
+    <option name="LAST_COMMIT_MESSAGE" value="indices attempt" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
