@@ -86,13 +86,26 @@ func BuildIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (map
 	return index, nil
 }
 
-func OpenIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (Index[T, D], error) {
+func OpenIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (Index[T, any], error) {
 	index, err := BuildIndex(c, extractor)
 	if err != nil {
-		return Index[T, D]{}, err
+		return Index[T, any]{}, err
 	}
 
-	indexInterface := Index[T, D]{Index: index, Extractor: extractor, Collection: c}
+	x := func(a T) any {
+		return extractor(a)
+	}
+
+	y := map[any][]string{}
+
+	for k, v := range index {
+		y[k] = make([]string, len(v))
+		for i, id := range v {
+			y[k][i] = id
+		}
+	}
+
+	indexInterface := Index[T, any]{Index: y, Extractor: x, Collection: c}
 
 	c.Indices = append(c.Indices, indexInterface)
 
@@ -323,17 +336,10 @@ func (t *Collection[T]) Insert(data T) error {
 		return err
 	}
 
-	fmt.Println(3333, t.Indices)
-
 	for _, indexInterface := range t.Indices {
-		fmt.Println(6666, indexInterface.(Index[T, any]))
-		index, ok := indexInterface.(Index[any, any])
-		if !ok {
-			fmt.Println(4444)
-			continue
-		}
+		index := indexInterface
 		key := index.Extractor(data)
-		fmt.Println(2222, "added", data, "to index", key)
+		//fmt.Println(2222, "added", data, "to index", key)
 		index.Index[key] = append(index.Index[key], fmt.Sprintf("%d", meta.LastID))
 	}
 

@@ -25,32 +25,54 @@ func bench() {
 	timing("DB Init")
 
 	// Insert 1000 records
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1000; i++ {
 		_ = collection.Insert(Person{Name: fmt.Sprintf("Person %d", i), Age: i})
 	}
 
 	timing("Insert 1000 records")
 
-	index, err := OpenIndex(&collection, func(p Person) string {
+	// Start indexing
+	index, _ := OpenIndex[Person, string](&collection, func(p Person) string {
 		return p.Name
 	})
-	if err != nil {
-		return
-	}
 
 	timing("Index Init")
-	fmt.Println(index.Get("Person 956"))
-	timing("Get 1 record from index")
 
-	_ = collection.Insert(Person{Name: "Someone", Age: 10000})
-	timing("Insert 1 record")
+	// Insert 1000 records
+	for i := 0; i < 1000; i++ {
+		_ = collection.Insert(Person{Name: fmt.Sprintf("Person %d 2", i), Age: -i})
+	}
 
-	x, e := index.Get("Someone")
+	timing("Insert 1000 records")
 
-	fmt.Println(1111, x, e)
+	// Get 500 records by index
+	for i := 0; i < 500; i++ {
+		_, _ = index.Get(fmt.Sprintf("Person %d", i))
+	}
 
-	fmt.Println(collection.Select(func(p Person) bool { return p.Name == "Person 956" }))
-	timing("Get 1 record from collection")
+	timing("Get 500 records")
+
+	// Get 500 records by query
+	results, _ := collection.Select(
+		func(p Person) bool {
+			return 0 < p.Age && p.Age < 500
+		})
+
+	timing("Select 500 records")
+
+	// Get 1 record by index
+	_, _ = index.Get("Person 0")
+
+	timing("Get 1 record")
+
+	// Get 1 record by query
+
+	results, _ = collection.Select(
+		func(p Person) bool {
+			return p.Name == "Person 0"
+		})
+
+	timing("Select 1 record")
 
 	// Update 500 records
 	_ = collection.Update(
@@ -64,7 +86,7 @@ func bench() {
 	timing("Update 500 records")
 
 	// Select 500 records
-	results, _ := collection.Select(
+	results, _ = collection.Select(
 		func(p Person) bool {
 			return p.Age < 1000
 		})
