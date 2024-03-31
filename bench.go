@@ -25,21 +25,32 @@ func bench() {
 	timing("DB Init")
 
 	// Insert 1000 records
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5; i++ {
 		_ = collection.Insert(Person{Name: fmt.Sprintf("Person %d", i), Age: i})
 	}
 
 	timing("Insert 1000 records")
 
-	index, err := BuildIndex(collection, func(p Person) string {
+	index, err := OpenIndex(&collection, func(p Person) string {
 		return p.Name
 	})
 	if err != nil {
 		return
 	}
 
-	fmt.Println(index["Person 956"])
 	timing("Index Init")
+	fmt.Println(index.Get("Person 956"))
+	timing("Get 1 record from index")
+
+	_ = collection.Insert(Person{Name: "Someone", Age: 10000})
+	timing("Insert 1 record")
+
+	x, e := index.Get("Someone")
+
+	fmt.Println(1111, x, e)
+
+	fmt.Println(collection.Select(func(p Person) bool { return p.Name == "Person 956" }))
+	timing("Get 1 record from collection")
 
 	// Update 500 records
 	_ = collection.Update(
