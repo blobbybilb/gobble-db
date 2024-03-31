@@ -31,6 +31,16 @@ func bench() {
 
 	timing("Insert 1000 records")
 
+	index, err := BuildIndex(collection, func(p Person) string {
+		return p.Name
+	})
+	if err != nil {
+		return
+	}
+
+	fmt.Println(index["Person 956"])
+	timing("Index Init")
+
 	// Update 500 records
 	_ = collection.Update(
 		func(p Person) bool {
