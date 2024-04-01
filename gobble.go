@@ -1,4 +1,4 @@
-package main
+package gobble
 
 import (
 	"encoding/gob"
