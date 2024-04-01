@@ -1,19 +1,30 @@
-## gobble-db
+# gobble-db
 
-Pure go (no cgo) disk-based "struct-oriented" embedded DB, with a **simple**, **friendly**, and **general** API.
+A pure go (no cgo) on-disk "struct-oriented" embedded DB, with a **simple**, **friendly**, and **general** API.
 
-Goal: friendliest simple embedded DB for small-to-medium-sized Go projects.
+#### Goal: friendliest simple embedded DB for small-to-medium-sized Go projects.
 
+**Simple**: 0 dependencies, entire API shown in the example below, ~800 LoC implementation
+
+**Friendly**: pure go so cross-compiling is easy, "just works" with no config, straightforward API
+
+**General**: simple doesn't mean limited, most functions take functions/types as params to allow for flexibility without
+adding complexity to the DB API (see querying and indexing below), relying instead on Go language features and type system
 
 ## Docs
 
-(WIP)
-
-Here's an example:
-
+Take a look at this example covering all the functionality:
 ```go
 package main
 
+import (
+	"fmt"
+	"github.com/blobbybilb/gobble-db"
+)
+
+// Define your data type
+// Most structs containing data only would work, but they need to be serializable by the gob package
+// Gobble does not require you to do any gobble-specific configuration to your data types
 type Shape struct {
 	Name        string
 	NumSides    int
@@ -21,30 +32,45 @@ type Shape struct {
 }
 
 func main() {
-	db, _ := OpenDB("example-db")
+	db, _ := gobble.OpenDB("test-db")
 
-	c, _ := OpenCollection[Shape](db, "shapes")
+	// Pass in your struct as a type parameter, now you have a collection of that struct
+	shapes, _ := gobble.OpenCollection[Shape](db, "shapes")
 
-	// Keep an index by name
-	nameIdx, _ := OpenIndex[Shape, string](&c, func(u Shape) string { return u.Name })
+	// Start inserting data
+	shapes.Insert(Shape{"Square", 4, []int{4, 4, 4, 2}})
 
-	// Insert some shapes
-	_ = c.Insert(Shape{Name: "Triangle", NumSides: 3, SideLengths: []int{3, 4, 5}})
-	_ = c.Insert(Shape{Name: "Square", NumSides: 4, SideLengths: []int{1, 1, 1, 1}})
-	_ = c.Insert(Shape{Name: "Pentagon", NumSides: 5, SideLengths: []int{1, 1, 1, 1, 2}})
-	_ = c.Insert(Shape{Name: "Hexagon", NumSides: 6, SideLengths: []int{1, 1, 1, 1, 1, 1}})
+	// To query data, pass Select a function that takes in your struct and returns a boolean <-- that's a "query" function
+	// query: func(Shape) bool -> ([]Shape, error)
+	result, _ := shapes.Select(func(shape Shape) bool { return shape.NumSides == 4 })
+	fmt.Println(result) // result is a slice of Shape structs
 
-	// Query all shapes with more than 4 sides
-	result, _ := c.Select(func(s Shape) bool { return s.NumSides > 4 })
+	// To update data, pass Modify a query function,  and a function that takes in your struct and returns a modified struct <-- that's an "updater" function
+	// query: func(Shape) bool, updater: func(Shape) Shape
+	shapes.Modify(
+		func(shape Shape) bool { return shape.NumSides == 4 },
+		func(shape Shape) Shape { shape.SideLengths[3] = 4; return shape })
 
-	_ = c.Modify(func(s Shape) bool { return s.NumSides == 3 }, func(s Shape) Shape { s.SideLengths[0] = 4; return s })
-	_ = c.Delete(func(s Shape) bool { return s.NumSides == 4 })
+	// To delete data, pass Delete a function that takes in your struct and returns a boolean
+	// query: func(Shape) bool
+	shapes.Delete(func(shape Shape) bool { return shape.NumSides > 10 })
 
-	// Get from an index
-	result, _ = nameIdx.Get("Pentagon")
+	// Indexing
+	// Indexing speeds up querying by storing a hash map of keys to slices of structs in-memory, without an index queries need to scan the entire collection
+	// Indexing does come with a memory and a (small) write performance cost, but read performance is greatly improved
+	// Indexing is done by passing in a function that takes in your struct and returns a value to index on <- that's an "extractor" function
+	// The first type parameter is the type of the struct, and the second type parameter is the type of the index (in this case, string)
+	// collection: *Collection[Shape], extractor: func(Shape) string -> (Index[Shape, string], error)
+	nameIndex, _ := gobble.OpenIndex[Shape, string](&shapes, func(shape Shape) string { return shape.Name })
 
-	// Now make an index by perimeter
-	perimeterIdx, _ := OpenIndex[Shape, int](&c, func(u Shape) int {
+	// Now you can query the index by passing Get a value of the type that your extractor function returns (in this case, string)
+	// key: string -> ([]Shape, error)
+	fmt.Println(nameIndex.Get("Square"))
+
+	// You can do more with indexes
+	// This index has a key type of int (that represents the sum of the side lengths of the shape)
+	// collection: *Collection[Shape], extractor: func(Shape) int -> (Index[Shape, int], error)
+	perimeterIndex, _ := gobble.OpenIndex[Shape, int](&shapes, func(u Shape) int {
 		sum := 0
 		for _, l := range u.SideLengths {
 			sum += l
@@ -52,18 +78,32 @@ func main() {
 		return sum
 	})
 
-	// Query all shapes with a perimeter of 6
-	result, _ = perimeterIdx.Get(6)
-	fmt.Println(result)
-}
+	// You can query it the same way, but with an int key
+	perimeterIndex.Get(16)
 
+	// Other functions
+	shapes.Number()         // Returns the number of elements in the collection
+	nameIndex.Num("Square") // Returns the number of matching elements
+	nameIndex.Del("Square") // Deletes all elements that match the key
+	nameIndex.Mod("Square", // Modifies all elements that match the key, takes an updater function
+		func(s Shape) Shape { s.Name = "Still a Square"; return s })
+}
 ```
+
 
 ## Info
 
 ### Performance
 
-Performance is not a priority; minimal development overhead is. That said,
+Performance is not a priority; minimal development overhead is. That said, it should be fast enough for
+small-to-medium-sized projects (10k-100k items in a collection). Using some very rough benchmarks (like ~OOM):
+- Inserting 10k items takes about 1-2 seconds
+- Querying for ~5k of those takes about 0.5-1 seconds (not indexed)
+- Querying for ~5k of those takes about 0.1-0.2 seconds (indexed)
+- Querying for 1 of those takes about 0.00001-0.00003 seconds (indexed) (not indexed is about the same as for 5k not indexed)
+- Modifying 5k of those takes about 1-2 seconds (not indexed)
+- Deleting 5k of those takes about 0.5-1 seconds (not indexed)
+- Indexing 10k items takes about 1-1.5 seconds
 
 ### Does it support transactions? Async I/O? ACID?
 
@@ -73,3 +113,9 @@ Nope. Too much complexity for the goal of this project.
 If your "production" use case allows you to consider a library as new and not popular as this one,
 then yes, it will probably be production-ready enough for your use case. It's meant to be simple enough
 that any bugs surface quickly and are easy to fix.
+
+### Why is it called gobble-db?
+It uses the Go "gob" binary data format, and it's supposed to be simple and friendly, so gobble-db.
+
+### License
+LGPLv2.1

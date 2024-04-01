@@ -64,6 +64,7 @@ func main() {
 	// Other functions
 	shapes.Number()         // Returns the number of elements in the collection
 	nameIndex.Num("Square") // Returns the number of matching elements
-	nameIndex.Del("Square") // Deletes the index for the key "Square"
-
+	nameIndex.Del("Square") // Deletes all elements that match the key
+	nameIndex.Mod("Square", // Modifies all elements that match the key, takes an updater function
+		func(s Shape) Shape { s.Name = "Still a Square"; return s })
 }

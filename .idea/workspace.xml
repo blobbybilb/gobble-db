@@ -4,9 +4,12 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="indexing done">
-      <change afterPath="$PROJECT_DIR$/example/main.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/example/test-db/shapes/meta.gob" afterDir="false" />
+    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="fix the previous 2 commit stuff">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/example/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/example/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/example_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/gobble.go" beforeDir="false" afterPath="$PROJECT_DIR$/gobble.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -141,7 +144,9 @@
     <MESSAGE value="temp save" />
     <MESSAGE value="working indexing part 1" />
     <MESSAGE value="indexing done" />
-    <option name="LAST_COMMIT_MESSAGE" value="indexing done" />
+    <MESSAGE value="I thought I had a bug but my testing thing had a bug" />
+    <MESSAGE value="fix the previous 2 commit stuff" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix the previous 2 commit stuff" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

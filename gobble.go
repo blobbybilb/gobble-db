@@ -128,29 +128,23 @@ func buildIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (map
 		}
 	}(dir)
 
-	// Read all the files in the directory
 	files, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize the index
 	index := make(map[D][]string)
 
-	// Iterate over the files
 	for _, file := range files {
-		// Skip directories and non-data files
 		if file.IsDir() || file.Name()[0] != 'd' {
 			continue
 		}
 
-		// Open the file
 		f, err := os.Open(c.DB.Path + "/" + c.Name + "/" + file.Name())
 		if err != nil {
 			return nil, err
 		}
 
-		// Decode the data from the file
 		var data T
 		dec := gob.NewDecoder(f)
 		err = dec.Decode(&data)
@@ -162,11 +156,9 @@ func buildIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (map
 			return nil, err
 		}
 
-		// Extract the key from the data
 		key := extractor(data)
 
-		// Add the file id to the index
-		fileID := file.Name()[1 : len(file.Name())-4] // Remove the "d" prefix and ".gob" suffix
+		fileID := file.Name()[1 : len(file.Name())-4]
 		index[key] = append(index[key], fileID)
 	}
 
@@ -348,8 +340,7 @@ func (t *Collection[T]) Modify(query Query[T], updater Updater[T]) error {
 				key := index.Extractor(data)
 				fileIDs := index.Index[key]
 				for i, id := range fileIDs {
-					if id == file.Name()[1:len(file.Name())-4] { // Remove the "d" prefix and ".gob" suffix
-						// Remove the file id from the index
+					if id == file.Name()[1:len(file.Name())-4] {
 						index.Index[key] = append(fileIDs[:i], fileIDs[i+1:]...)
 						break
 					}
@@ -376,7 +367,7 @@ func (t *Collection[T]) Modify(query Query[T], updater Updater[T]) error {
 			// Add the updated data to the indices
 			for _, index := range t.Indices {
 				key := index.Extractor(data)
-				index.Index[key] = append(index.Index[key], file.Name()[1:len(file.Name())-4]) // Add the "d" prefix and ".gob" suffix
+				index.Index[key] = append(index.Index[key], file.Name()[1:len(file.Name())-4])
 			}
 		}
 	}
@@ -437,8 +428,7 @@ func (t *Collection[T]) Delete(query Query[T]) error {
 				key := index.Extractor(data)
 				fileIDs := index.Index[key]
 				for i, id := range fileIDs {
-					if id == file.Name()[1:len(file.Name())-4] { // Remove the "d" prefix and ".gob" suffix
-						// Remove the file id from the index
+					if id == file.Name()[1:len(file.Name())-4] {
 						index.Index[key] = append(fileIDs[:i], fileIDs[i+1:]...)
 						break
 					}
@@ -529,25 +519,20 @@ func (t *Collection[T]) Number() (int, error) {
 }
 
 func (t *Index[T, D]) Get(key D) ([]T, error) {
-	// Check if the key exists in the index
 	fileIDs, ok := t.Index[key]
 	if !ok {
 		// If the key does not exist, return an empty slice and no error
 		return []T{}, nil
 	}
 
-	// Initialize a slice to hold the results
 	var results []T
 
-	// Iterate over the file IDs associated with the key
 	for _, fileID := range fileIDs {
-		// Open the file
 		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
 		if err != nil {
 			return nil, err
 		}
 
-		// Decode the data from the file
 		var data T
 		dec := gob.NewDecoder(f)
 		err = dec.Decode(&data)
@@ -556,17 +541,14 @@ func (t *Index[T, D]) Get(key D) ([]T, error) {
 			return nil, err
 		}
 
-		// Close the file
 		err = f.Close()
 		if err != nil {
 			return nil, err
 		}
 
-		// Append the data to the results
 		results = append(results, data)
 	}
 
-	// Return the results and no error
 	return results, nil
 }
 
@@ -644,13 +626,11 @@ func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
 	copy(fileIDsCopy, fileIDs)
 
 	for _, fileID := range fileIDsCopy {
-		// Open the file
 		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
 		if err != nil {
 			return err
 		}
 
-		// Decode the data from the file
 		var data T
 		dec := gob.NewDecoder(f)
 		err = dec.Decode(&data)
@@ -659,7 +639,6 @@ func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
 			return err
 		}
 
-		// Close the file
 		err = f.Close()
 		if err != nil {
 			return err
@@ -671,23 +650,19 @@ func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
 			indexFileIDs := index.Index[indexKey]
 			for i, id := range indexFileIDs {
 				if id == fileID {
-					// Remove the file id from the index
 					index.Index[indexKey] = append(indexFileIDs[:i], indexFileIDs[i+1:]...)
 					break
 				}
 			}
 		}
 
-		// Update the data
 		data = updater(data)
 
-		// Open the file for writing
 		f, err = os.Create(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
 		if err != nil {
 			return err
 		}
 
-		// Encode the updated data into the file
 		enc := gob.NewEncoder(f)
 		err = enc.Encode(data)
 		if err != nil {
@@ -695,7 +670,6 @@ func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
 			return err
 		}
 
-		// Close the file
 		err = f.Close()
 		if err != nil {
 			return err
