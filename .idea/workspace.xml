@@ -4,18 +4,12 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="temp save">
-      <change afterPath="$PROJECT_DIR$/typetest.go" afterDir="false" />
+    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="working indexing part 1">
+      <change afterPath="$PROJECT_DIR$/t" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bench.go" beforeDir="false" afterPath="$PROJECT_DIR$/bench.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gobble.go" beforeDir="false" afterPath="$PROJECT_DIR$/gobble.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d1.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d2.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d3.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d4.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d5.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/d6.gob" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdb/testcollection/meta.gob" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/typetest.go" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -110,7 +104,8 @@
     <MESSAGE value="indices fail" />
     <MESSAGE value="before indices try 2" />
     <MESSAGE value="temp save" />
-    <option name="LAST_COMMIT_MESSAGE" value="temp save" />
+    <MESSAGE value="working indexing part 1" />
+    <option name="LAST_COMMIT_MESSAGE" value="working indexing part 1" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

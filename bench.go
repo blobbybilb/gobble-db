@@ -14,14 +14,12 @@ func timing(msg string) {
 }
 
 func bench() {
-	// Benchmarks
 	timing("Start")
 
 	// Initialize the DB
 	db, _ := OpenDB("testdb")
 	_ = db.DeleteCollection("testcollection")
 	collection, _ := OpenCollection[Person](db, "testcollection")
-
 	timing("DB Init")
 
 	// Insert 1000 records
@@ -29,14 +27,14 @@ func bench() {
 		_ = collection.Insert(Person{Name: fmt.Sprintf("Person %d", i), Age: i})
 	}
 
-	timing("Insert 1000 records")
+	timing("Insert 1000 records (before indexing)")
 
 	// Start indexing
 	index, _ := OpenIndex[Person, string](&collection, func(p Person) string {
 		return p.Name
 	})
 
-	timing("Index Init")
+	timing("Index init")
 
 	// Insert 1000 records
 	for i := 0; i < 1000; i++ {
