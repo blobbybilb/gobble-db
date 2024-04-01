@@ -4,12 +4,14 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="working indexing part 1">
-      <change afterPath="$PROJECT_DIR$/t" afterDir="false" />
+    <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="indexing done">
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bench.go" beforeDir="false" afterPath="$PROJECT_DIR$/bench.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gobble.go" beforeDir="false" afterPath="$PROJECT_DIR$/gobble.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/typetest.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/t" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test.go" beforeDir="false" afterPath="$PROJECT_DIR$/test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test.gob" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,6 +31,9 @@
   <component name="GOROOT" url="file:///opt/homebrew/opt/go/libexec" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
@@ -71,7 +76,7 @@
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Go Build.go build gobble">
     <configuration name="go build gobble" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="gobble-db" />
       <working_directory value="$PROJECT_DIR$" />
@@ -81,9 +86,19 @@
       <filePath value="$PROJECT_DIR$/gobble.go" />
       <method v="2" />
     </configuration>
+    <configuration name="go build gobble.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="gobble-db" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <package value="gobble" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/gobble.go" />
+      <method v="2" />
+    </configuration>
     <recent_temporary>
       <list>
         <item itemvalue="Go Build.go build gobble" />
+        <item itemvalue="Go Build.go build gobble.go" />
       </list>
     </recent_temporary>
   </component>
@@ -105,7 +120,8 @@
     <MESSAGE value="before indices try 2" />
     <MESSAGE value="temp save" />
     <MESSAGE value="working indexing part 1" />
-    <option name="LAST_COMMIT_MESSAGE" value="working indexing part 1" />
+    <MESSAGE value="indexing done" />
+    <option name="LAST_COMMIT_MESSAGE" value="indexing done" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

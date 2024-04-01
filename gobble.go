@@ -20,7 +20,7 @@ type DB struct {
 type Collection[T any] struct {
 	Name    string
 	DB      DB
-	Indices []Index[T, any]
+	Indices []Index[T, any] // Go doesn't seem to support generics here, this is internal so `any` is fine
 }
 
 type Index[T any, D comparable] struct {
@@ -40,8 +40,137 @@ func OpenDB(path string) (DB, error) {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return DB{}, err
 	}
-
 	return DB{Path: path}, nil
+}
+
+func OpenCollection[T any](db DB, name string) (Collection[T], error) {
+	if !isValidCollectionName(name) {
+		return Collection[T]{}, fmt.Errorf("invalid collection name")
+	}
+
+	exists, err := db.CollectionExists(name)
+	if err != nil {
+		return Collection[T]{}, err
+	}
+
+	if !exists {
+		if err := initializeCollection[T](name, db); err != nil {
+			return Collection[T]{}, err
+		}
+	}
+
+	return Collection[T]{Name: name, DB: db}, nil
+}
+
+func OpenIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (Index[T, any], error) {
+	index, err := buildIndex(c, extractor)
+	if err != nil {
+		return Index[T, any]{}, err
+	}
+
+	x := func(a T) any {
+		return extractor(a)
+	}
+	y := map[any][]string{}
+
+	for k, v := range index {
+		y[k] = make([]string, len(v))
+		for i, id := range v {
+			y[k][i] = id
+		}
+	}
+
+	indexInterface := Index[T, any]{Index: y, Extractor: x, Collection: c}
+	c.Indices = append(c.Indices, indexInterface)
+	return indexInterface, nil
+}
+
+func initializeCollection[T any](name string, db DB) error {
+	exists, err := db.CollectionExists(name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("collection already exists")
+	}
+
+	if err := os.MkdirAll(db.Path+"/"+name, 0755); err != nil {
+		return err
+	}
+
+	file, err := os.Create(db.Path + "/" + name + "/meta.gob")
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
+
+	enc := gob.NewEncoder(file)
+	err = enc.Encode(CollectionMetadata[T]{LastID: 0})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (map[D][]string, error) {
+	// Open the directory of the collection
+	dir, err := os.Open(c.DB.Path + "/" + c.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer func(dir *os.File) {
+		err := dir.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(dir)
+
+	// Read all the files in the directory
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the index
+	index := make(map[D][]string)
+
+	// Iterate over the files
+	for _, file := range files {
+		// Skip directories and non-data files
+		if file.IsDir() || file.Name()[0] != 'd' {
+			continue
+		}
+
+		// Open the file
+		f, err := os.Open(c.DB.Path + "/" + c.Name + "/" + file.Name())
+		if err != nil {
+			return nil, err
+		}
+
+		// Decode the data from the file
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		if err != nil {
+			return nil, err
+		}
+		err = f.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		// Extract the key from the data
+		key := extractor(data)
+
+		// Add the file id to the index
+		fileID := file.Name()[1 : len(file.Name())-4] // Remove the "d" prefix and ".gob" suffix
+		index[key] = append(index[key], fileID)
+	}
+
+	return index, nil
 }
 
 func (t *DB) ListCollections() ([]string, error) {
@@ -91,55 +220,6 @@ func (t *DB) DeleteCollection(name string) error {
 	}
 
 	return nil
-}
-
-func initializeCollection[T any](name string, db DB) error {
-	exists, err := db.CollectionExists(name)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("collection already exists")
-	}
-
-	if err := os.MkdirAll(db.Path+"/"+name, 0755); err != nil {
-		return err
-	}
-
-	file, err := os.Create(db.Path + "/" + name + "/meta.gob")
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(file)
-
-	enc := gob.NewEncoder(file)
-	err = enc.Encode(CollectionMetadata[T]{LastID: 0})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func OpenCollection[T any](db DB, name string) (Collection[T], error) {
-	if !isValidCollectionName(name) {
-		return Collection[T]{}, fmt.Errorf("invalid collection name")
-	}
-
-	exists, err := db.CollectionExists(name)
-	if err != nil {
-		return Collection[T]{}, err
-	}
-
-	if !exists {
-		if err := initializeCollection[T](name, db); err != nil {
-			return Collection[T]{}, err
-		}
-	}
-
-	return Collection[T]{Name: name, DB: db}, nil
 }
 
 func (t *Collection[T]) getMetadata() (CollectionMetadata[T], error) {
@@ -220,7 +300,7 @@ func (t *Collection[T]) Insert(data T) error {
 	return nil
 }
 
-func (t *Collection[T]) Update(query Query[T], updater Updater[T]) error {
+func (t *Collection[T]) Modify(query Query[T], updater Updater[T]) error {
 	dir, err := os.Open(t.DB.Path + "/" + t.Name)
 	if err != nil {
 		return err
@@ -352,7 +432,7 @@ func (t *Collection[T]) Delete(query Query[T]) error {
 				return err
 			}
 
-			// Update indices
+			// Modify indices
 			for _, index := range t.Indices {
 				key := index.Extractor(data)
 				fileIDs := index.Index[key]
@@ -421,7 +501,7 @@ func (t *Collection[T]) Select(query Query[T]) ([]T, error) {
 	return results, nil
 }
 
-func (t *Collection[T]) Count() (int, error) {
+func (t *Collection[T]) Number() (int, error) {
 	dir, err := os.Open(t.DB.Path + "/" + t.Name)
 	if err != nil {
 		return 0, err
@@ -446,90 +526,6 @@ func (t *Collection[T]) Count() (int, error) {
 	}
 
 	return count, nil
-}
-
-func BuildIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (map[D][]string, error) {
-	// Open the directory of the collection
-	dir, err := os.Open(c.DB.Path + "/" + c.Name)
-	if err != nil {
-		return nil, err
-	}
-	defer func(dir *os.File) {
-		err := dir.Close()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}(dir)
-
-	// Read all the files in the directory
-	files, err := dir.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize the index
-	index := make(map[D][]string)
-
-	// Iterate over the files
-	for _, file := range files {
-		// Skip directories and non-data files
-		if file.IsDir() || file.Name()[0] != 'd' {
-			continue
-		}
-
-		// Open the file
-		f, err := os.Open(c.DB.Path + "/" + c.Name + "/" + file.Name())
-		if err != nil {
-			return nil, err
-		}
-
-		// Decode the data from the file
-		var data T
-		dec := gob.NewDecoder(f)
-		err = dec.Decode(&data)
-		if err != nil {
-			return nil, err
-		}
-		err = f.Close()
-		if err != nil {
-			return nil, err
-		}
-
-		// Extract the key from the data
-		key := extractor(data)
-
-		// Add the file id to the index
-		fileID := file.Name()[1 : len(file.Name())-4] // Remove the "d" prefix and ".gob" suffix
-		index[key] = append(index[key], fileID)
-	}
-
-	return index, nil
-}
-
-func OpenIndex[T any, D comparable](c *Collection[T], extractor func(T) D) (Index[T, any], error) {
-	index, err := BuildIndex(c, extractor)
-	if err != nil {
-		return Index[T, any]{}, err
-	}
-
-	x := func(a T) any {
-		return extractor(a)
-	}
-
-	y := map[any][]string{}
-
-	for k, v := range index {
-		y[k] = make([]string, len(v))
-		for i, id := range v {
-			y[k][i] = id
-		}
-	}
-
-	indexInterface := Index[T, any]{Index: y, Extractor: x, Collection: c}
-
-	c.Indices = append(c.Indices, indexInterface)
-
-	return indexInterface, nil
 }
 
 func (t *Index[T, D]) Get(key D) ([]T, error) {
@@ -580,8 +576,54 @@ func (t *Index[T, D]) Del(key D) error {
 		return nil
 	}
 
-	for _, fileID := range fileIDs {
-		err := os.Remove(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
+	fileIDsCopy := make([]string, len(fileIDs))
+	copy(fileIDsCopy, fileIDs)
+
+	if len(t.Collection.Indices) == 1 {
+		// only an optimization
+		for _, fileID := range fileIDsCopy {
+			err := os.Remove(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
+			if err != nil {
+				return err
+			}
+		}
+
+		delete(t.Index, key)
+		return nil
+	}
+
+	for _, fileID := range fileIDsCopy {
+		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
+		if err != nil {
+			return err
+		}
+
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		if err != nil {
+			_ = f.Close()
+			return err
+		}
+
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+
+		// Remove from indices
+		for _, index := range t.Collection.Indices {
+			indexKey := index.Extractor(data)
+			indexFileIDs := index.Index[indexKey]
+			for i, id := range indexFileIDs {
+				if id == fileID {
+					index.Index[indexKey] = append(indexFileIDs[:i], indexFileIDs[i+1:]...)
+					break
+				}
+			}
+		}
+
+		err = os.Remove(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
 		if err != nil {
 			return err
 		}
@@ -592,130 +634,88 @@ func (t *Index[T, D]) Del(key D) error {
 	return nil
 }
 
-//func (t *Collection[T]) ListIndexes() ([]string, error) {
-//	dir, err := os.Open(t.DB.Path + "/" + t.Name)
-//	if err != nil {
-//		return nil, err
-//	}
-//	defer func(dir *os.File) {
-//		err := dir.Close()
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//	}(dir)
-//
-//	files, err := dir.Readdir(-1)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	var indexes []string
-//	for _, file := range files {
-//		if file.IsDir() {
-//			continue
-//		}
-//
-//		if file.Name()[0] != 'i' {
-//			continue
-//		}
-//
-//		indexes = append(indexes, file.Name()[1:len(file.Name())-4])
-//	}
-//
-//	return indexes, nil
-//}
-//
-//func (t *Collection[T]) IndexExists(name string) (bool, error) {
-//	indexes, err := t.ListIndexes()
-//	if err != nil {
-//		return false, err
-//	}
-//
-//	for _, index := range indexes {
-//		if index == name {
-//			return true, nil
-//		}
-//	}
-//
-//	return false, nil
-//}
-//
-//func (t *Collection[T]) DeleteIndex(name string) error {
-//	err := os.Remove(t.DB.Path + "/" + t.Name + "/i" + name + ".gob")
-//	if err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
-//
+func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
+	fileIDs, ok := t.Index[key]
+	if !ok {
+		return nil
+	}
 
-//
-//func OpenIndex[T any, D comparable](collection Collection[T], name string, extractor func(T) D) (Index[T, D], error) {
-//	if !isValidIndexName(name) {
-//		return Index[T, D]{}, fmt.Errorf("invalid index name")
-//	}
-//	index := Index[T, D]{Collection: collection, Extractor: extractor, Name: name}
-//
-//	exists, err := collection.IndexExists(name)
-//	if err != nil {
-//		return Index[T, D]{}, err
-//	}
-//
-//	if !exists {
-//		if err := index.Build(); err != nil {
-//			return Index[T, D]{}, err
-//		}
-//	}
-//
-//	return index, nil
-//}
-//
-//func (t *Index[T, D]) Get(key D) ([]T, error) {
-//	file, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/i" + t.Name + ".gob")
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	defer func(file *os.File) {
-//		err := file.Close()
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//	}(file)
-//
-//	var index IndexData[D]
-//	dec := gob.NewDecoder(file)
-//	err = dec.Decode(&index)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	ids := index[key]
-//	if ids == nil {
-//		return []T{}, nil
-//	}
-//
-//	var results []T
-//	for _, id := range ids {
-//		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + id + ".gob")
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		var data T
-//		dec := gob.NewDecoder(f)
-//		err = dec.Decode(&data)
-//		if err != nil {
-//			return nil, err
-//		}
-//		err = f.Close()
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		results = append(results, data)
-//	}
-//
-//	return results, nil
-//}
+	fileIDsCopy := make([]string, len(fileIDs))
+	copy(fileIDsCopy, fileIDs)
+
+	for _, fileID := range fileIDsCopy {
+		// Open the file
+		f, err := os.Open(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
+		if err != nil {
+			return err
+		}
+
+		// Decode the data from the file
+		var data T
+		dec := gob.NewDecoder(f)
+		err = dec.Decode(&data)
+		if err != nil {
+			_ = f.Close()
+			return err
+		}
+
+		// Close the file
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+
+		// Remove the data from the indices
+		for _, index := range t.Collection.Indices {
+			indexKey := index.Extractor(data)
+			indexFileIDs := index.Index[indexKey]
+			for i, id := range indexFileIDs {
+				if id == fileID {
+					// Remove the file id from the index
+					index.Index[indexKey] = append(indexFileIDs[:i], indexFileIDs[i+1:]...)
+					break
+				}
+			}
+		}
+
+		// Update the data
+		data = updater(data)
+
+		// Open the file for writing
+		f, err = os.Create(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
+		if err != nil {
+			return err
+		}
+
+		// Encode the updated data into the file
+		enc := gob.NewEncoder(f)
+		err = enc.Encode(data)
+		if err != nil {
+			_ = f.Close()
+			return err
+		}
+
+		// Close the file
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+
+		// Add the updated data to the indices
+		for _, index := range t.Collection.Indices {
+			indexKey := index.Extractor(data)
+			index.Index[indexKey] = append(index.Index[indexKey], fileID)
+		}
+	}
+
+	return nil
+}
+
+func (t *Index[T, D]) Num(key D) (int, error) {
+	fileIDs, ok := t.Index[key]
+	if !ok {
+		return 0, nil
+	}
+
+	return len(fileIDs), nil
+}
