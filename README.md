@@ -9,9 +9,34 @@ A pure go (no cgo) on-disk "struct-oriented" embedded DB, with a **simple**, **f
 **Friendly**: pure go so cross-compiling is easy, "just works" with no config, straightforward API
 
 **General**: simple doesn't mean limited, most functions take functions/types as params to allow for flexibility without
-adding complexity to the DB API (see querying and indexing below), relying instead on Go language features and type system
+the added complexity of a query building API, relying instead on built-in Go language features and type system
+(see querying and indexing below).
 
 ## Docs
+
+Core API Overview:
+```go
+// T is the type of the struct you want to store
+OpenCollection[T](db DB, name string)
+collection.Insert(T)
+collection.Select(func(T) bool) -> []T // function param should return true for elements you want to retrieve
+
+// first function param should return true for elements you want
+// second function param should return the modified element
+collection.Modify(func(T) bool, func(T) T)
+
+collection.Delete(func(T) bool) // function param should return true for elements you want to delete
+
+// Indexing:
+
+// T is the type of the struct your collection holds, K is the type of the index
+// The function passed should return the value you want to index on, given a struct of type T
+// This gives you the flexibility to index on any field, part of a field, a combination of fields, etc.
+func OpenIndex[T, K](*Collection[T], func(T) K) -> Index[T, K]
+index.Get(K) -> []T
+
+// (Note: most of these functions also return an error type, not shown here)
+```
 
 Take a look at this example covering all the functionality:
 ```go
@@ -96,7 +121,7 @@ func main() {
 ### Performance
 
 Performance is not a priority; minimal development overhead is. That said, it should be fast enough for
-small-to-medium-sized projects (10k-100k items in a collection). Using some very rough benchmarks (like ~OOM):
+small-to-medium-sized projects (10k-100k items in a collection). Using some very rough benchmarks (like ~OoM):
 - Inserting 10k items takes about 1-2 seconds
 - Querying for ~5k of those takes about 0.5-1 seconds (not indexed)
 - Querying for ~5k of those takes about 0.1-0.2 seconds (indexed)
@@ -104,6 +129,7 @@ small-to-medium-sized projects (10k-100k items in a collection). Using some very
 - Modifying 5k of those takes about 1-2 seconds (not indexed)
 - Deleting 5k of those takes about 0.5-1 seconds (not indexed)
 - Indexing 10k items takes about 1-1.5 seconds
+
 
 ### Does it support transactions? Async I/O? ACID?
 
