@@ -10,7 +10,7 @@ import (
 type Shape struct {
 	Name        string
 	NumSides    int
-	SideLengths *[]int
+	SideLengths []int
 }
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 	shapes, _ := gobble.OpenCollection[Shape](db, "shapes")
 
 	// Start inserting data
-	shapes.Insert(Shape{"Square", 4, &[]int{4, 4, 4, 2}})
+	shapes.Insert(Shape{"Square", 4, []int{4, 4, 4, 2}})
 
 	// To query data, pass Select a function that takes in your struct and returns a boolean <- that's a "query" function
 	// query: func(Shape) bool -> ([]Shape, error)
@@ -31,7 +31,7 @@ func main() {
 	// query: func(Shape) bool, updater: func(Shape) Shape
 	shapes.Modify(
 		func(shape Shape) bool { return shape.NumSides == 4 },
-		func(shape *Shape) *Shape { shape.SideLengths[3] = 2; return shape })
+		func(shape Shape) Shape { shape.SideLengths[3] = 4; return shape })
 
 	// To delete data, pass Delete a function that takes in your struct and returns a boolean
 	// query: func(Shape) bool
