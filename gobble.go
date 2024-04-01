@@ -30,7 +30,7 @@ type Index[T any, D comparable] struct {
 }
 
 type Query[T any] func(T) bool
-type Updater[T any] func(T) T
+type Updater[T any] func(*T) *T
 
 type CollectionMetadata[T any] struct {
 	LastID int
@@ -356,7 +356,7 @@ func (t *Collection[T]) Modify(query Query[T], updater Updater[T]) error {
 				}
 			}
 
-			data = updater(data)
+			data = *updater(&data)
 
 			f, err := os.Create(t.DB.Path + "/" + t.Name + "/" + file.Name())
 			if err != nil {
@@ -679,7 +679,7 @@ func (t *Index[T, D]) Mod(key D, updater Updater[T]) error {
 		}
 
 		// Update the data
-		data = updater(data)
+		data = *updater(&data)
 
 		// Open the file for writing
 		f, err = os.Create(t.Collection.DB.Path + "/" + t.Collection.Name + "/d" + fileID + ".gob")
