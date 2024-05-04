@@ -12,6 +12,8 @@ A pure go (no cgo) on-disk "struct-oriented" embedded DB, with a **simple**, **f
 the added complexity of a query building API, relying instead on built-in Go language features and type system
 (see querying and indexing below).
 
+`go get github.com/blobbybilb/gobble-db`
+
 ## Docs
 
 Core API Overview:

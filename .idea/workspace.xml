@@ -5,6 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b398fe17-93bd-4255-a928-4b73ad89bc12" name="Changes" comment="fix the previous 2 commit stuff">
+      <change afterPath="$PROJECT_DIR$/example/test/go.mod" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/example/test/go.sum" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
